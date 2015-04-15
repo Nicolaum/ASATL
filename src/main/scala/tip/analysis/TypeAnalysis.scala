@@ -2,9 +2,11 @@ package tip.analysis
 
 import tip.AST.DepthFirstAstVisitor
 import tip.solvers._
-import tip.newAST._
+import tip.AST._
 import tip.types._
 import scala.collection.{ mutable, immutable }
+import scala.collection.mutable.ArrayBuffer
+import scala.collection.immutable.IntMap.Tip
 
 /**
  * The analysis associates with each node in the AST a [[tip.types.TipType]].
@@ -15,9 +17,11 @@ import scala.collection.{ mutable, immutable }
 case class TypeAnalysis(program: AProgram)
   extends DepthFirstAstVisitor[Null] {
 
-  val solver = new UnionFindSolver[TipType]()
-  var constraints = Set[Constraint]()
-
+  val solver = new UnionFindSolver[TipType]();
+  var constraints = ArrayBuffer[Constraint]();
+  val rb = "\u27E6";
+  val lb = "\u27e7";
+  val alpha = "\u03B1";
 
   performAnalysis()
 
@@ -26,24 +30,133 @@ case class TypeAnalysis(program: AProgram)
    * Note that we collect them only for debugging purposes - the solving happens on-the-fly.
    * @return the set of constraints
    */
-  def generatedConstraints(): Set[Constraint] = constraints
-
+  def generatedConstraints(): ArrayBuffer[Constraint] = constraints.distinct;
+  
   /**
    * Generates the constraint t1 == t2 on the solver, and record it in `constraints`
    */
   private def unifyAndRecord(t1: Term[TipType], t2: Term[TipType], genId: String): Unit = {
-    constraints = constraints + Constraint(t1, t2, genId)
+    constraints += Constraint(t1, t2, genId)
     solver.unify(t1, t2)
   }
-
+  private def b(t : Any) : String = s"$rb $t $lb";
+  private def extractDefinition(originalNode : AExpr) : ASTNode = 
+    originalNode.meta.definition match {
+    case Some( realDef ) => 
+      if ( realDef == originalNode ) realDef
+      else {
+        realDef match {
+          case e : AExpr =>
+            extractDefinition( e )
+          case _ => realDef
+        }    
+      }
+    case None => originalNode
+  }
   /**
    * Generates the constraints for the given sub-AST
    * @param node The node for which it generates the constraints
    * @param arg unused for this visitor
    */
   override def visit(node: ASTNode, arg: Null): Unit = {
-
-    visitChildren(node, null)
+    node match {
+      case e:AExpr => {
+        val origExpression = extractDefinition(e);
+        origExpression match {
+          case number:ANumber =>
+            unifyAndRecord(TipVar(number), TipInt(), s"${b(number.value)}=int");
+          case ABinaryOp(op, oleft, oright, _) =>
+            val left = extractDefinition(oleft);
+            val right = extractDefinition(oright);
+            op match {
+              case Eqq() => 
+                unifyAndRecord(TipVar(left), TipVar(right), s"${b(left)}=${b(right)}");
+              case _     =>
+                unifyAndRecord(TipVar(left) , TipInt(), s"${b(left)}=int");
+                unifyAndRecord(TipVar(right), TipInt(), s"${b(right)}=int");
+            }
+            unifyAndRecord(TipVar(node) , TipInt(), s"${b(node)}=int");
+          case oinput:AInput =>
+            val input = extractDefinition(oinput);
+            unifyAndRecord(TipVar(input), TipInt(), s"${b(input)}=int");            
+          case ACallFuncExpr(oexp:AExpr, oargs, _ ) =>
+            val id = extractDefinition(oexp) match {
+              case AFunDeclaration(name, _, _, _ ) => name
+              case node => node
+            };
+            
+            val tipfun = TipFunction( oargs.map(extractDefinition(_))
+                                           .map(TipVar(_)), TipVar(origExpression) );
+            
+            val funstr = s"(${oargs.map(b(_)).mkString(", ")})->${b(origExpression)}"
+            
+            unifyAndRecord(TipVar(id), tipfun , s"${b(id)}=$funstr");
+          case AUnaryOp(op, otarget, _ ) =>
+            val target = extractDefinition( otarget );
+            op match {
+              case RefOp() =>
+                unifyAndRecord(TipVar(origExpression), 
+                               TipRef(TipVar(target)), 
+                               s"${b(origExpression)}=&${b(target)}")
+                               
+              case DerefOp() =>
+                unifyAndRecord(TipVar(target),
+                               TipRef(TipVar(origExpression)), 
+                               s"${b(target)}=&${b(origExpression)}")
+              case _ =>
+            }
+          case eo:AMalloc =>
+            val e = extractDefinition(eo);
+            unifyAndRecord(TipVar(e), 
+                           TipRef(TipAlpha(e)), 
+                           s"${b(e)}=&$alpha");
+          case eo:ANull =>
+            val e = extractDefinition(eo);
+            unifyAndRecord(TipVar(e), 
+                           TipRef(TipAlpha(e)), 
+                           s"${b(e)}=&$alpha");
+          case _ =>
+        }
+      }
+      case AAssignStmt(
+              AUnaryOp(DerefOp(), 
+                       oid:AIdentifier, _), oright, _) =>
+        val id    = extractDefinition(oid);
+        val right = extractDefinition(oright);
+        unifyAndRecord(TipVar(id),
+                       TipRef(TipVar(right)), 
+                       s"${b(id)}=&${b(right)}");
+      
+      case AAssignStmt(oid:AIdentifier, oright, _) =>
+        val id = extractDefinition(oid);
+        val right = extractDefinition(oright);
+        unifyAndRecord(TipVar(id), TipVar(right), 
+                       s"${b(id)}=${b(right)}");
+      
+      case AoutputStmt(oe:AExpr, _) => 
+        val e = extractDefinition(oe);
+        unifyAndRecord(TipVar(e), TipInt(), s"${b(e)}=int")
+      case AIfStmt( oe:AExpr, _, _, _ ) =>
+        val e = extractDefinition(oe);
+        unifyAndRecord(TipVar(e), TipInt(), s"${b(e)}=int")
+      case AWhileStmt( oe:AExpr, _, _ ) => 
+        val e = extractDefinition(oe);
+        unifyAndRecord(TipVar(e), TipInt(), s"${b(e)}=int")
+      case AFunDeclaration( id:AIdentifier, oargs, stms, _ ) =>
+        val args = oargs.map(extractDefinition(_).asInstanceOf[AIdentifier]);
+        
+        val ret  = stms.content.last.asInstanceOf[AReturnStmt];
+        
+        val last = extractDefinition( ret.value );
+        
+        val tipfun = TipFunction(args.map(TipVar(_)), TipVar(last));
+        
+        val funstr = s"(${args.map(b(_)).mkString(", ")})->${b(last)}";
+        
+        unifyAndRecord(TipVar(id), tipfun, s"${b(id)}=$funstr");
+      case _ =>
+    }
+    visitChildren( node, null )
   }
 
 
@@ -53,10 +166,9 @@ case class TypeAnalysis(program: AProgram)
     visit(program, null)
 
     // Now that we have the solution we can attach the it to the AST
-    new DepthFirstAstVisitor[Null] {
+    new DepthFirstAstVisitor[ Null ] {
       val sol = solver.solution()
-
-      visit(program, null)
+      visit( program, null )
 
       /**
        * Closes a type by replacing each variable that appears as a subterm
@@ -71,14 +183,13 @@ case class TypeAnalysis(program: AProgram)
         t match {
           case v: Var[TipType] =>
             if (!visited.contains(v) && (sol(v) != v)) {
-              val cterm = closeTerm(sol(v), visited + v)
+              val cterm = closeTerm(sol(v), visited + v )
               if (cterm.fv.contains(v)) {
                 Mu[TipType](v, cterm)
-              }
-              else
+              } else {
                 cterm
-            }
-            else {
+              }
+            } else {
               v
             }
           case _ =>
@@ -90,8 +201,8 @@ case class TypeAnalysis(program: AProgram)
 
       override def visit(node: ASTNode, arg: Null): Unit = {
         val nodeSol = node match {
-          case e: AExpr => e.meta.theType = Some(closeTerm(node).asInstanceOf[TipType])
-          case e: AFunDeclaration => e.meta.theType = Some(closeTerm(e.name).asInstanceOf[TipType])
+          case e: AFunDeclaration => e.meta.theType = Some( closeTerm( e.name ).asInstanceOf[TipType] )
+          case e: AExpr           => e.meta.theType = Some( closeTerm( node   ).asInstanceOf[TipType] )
           case _ =>
         }
         visitChildren(node, null)
@@ -108,5 +219,5 @@ case class TypeAnalysis(program: AProgram)
  * @param gen a string representing where the constraint is generated w.r.t. the program
  */
 case class Constraint(t1: Term[TipType], t2: Term[TipType], gen: String) {
-  override def toString: String = s"[${gen.padTo(20, ' ')}] $t1 == $t2"
+  override def toString: String = s"[${gen.padTo(50, ' ')}] $t1 == $t2"
 }

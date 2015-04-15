@@ -21,7 +21,7 @@ object Utils {
     val extension = kind match {
       case OutputKind.Cfg => "_cfg.dot"
       case OutputKind.Ast => "_type.ttip"
-      case OutputKind.Constraints => "_constraints.md"
+      case OutputKind.Constraints => "_constraints.consts"
     }
     val outFile = new File(outFolder, file.getName + id + extension)
     val pw = new PrintWriter(outFile, "UTF-8")

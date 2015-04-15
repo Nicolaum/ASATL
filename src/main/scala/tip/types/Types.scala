@@ -1,7 +1,7 @@
 package tip.types
 
 import tip.solvers.{Cons, Var, Term}
-import tip.newAST.ASTNode
+import tip.AST.ASTNode
 
 import scala.collection.immutable
 

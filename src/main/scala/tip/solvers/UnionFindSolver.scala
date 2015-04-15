@@ -28,20 +28,25 @@ class UnionFindSolver[A] {
   def unify(b1: Term[A], b2: Term[A]): Unit = {
     mkSet(b1)
     mkSet(b2)
-    val rep1 = find(b1)
-    val rep2 = find(b2)
+    val rep1 = find(b1);
+    val rep2 = find(b2);
 
     if (rep1 == rep2) return
 
     (rep1, rep2) match {
-      case (v1: Var[A], v2: Var[A]) =>
+      case (v1: Var[A], v2: Var[A]) => {
         mkUnion(v1, v2)
-      case (v1: Var[A], t2: Term[A]) =>
+      }
+        
+      case (v1: Var[A], t2: Cons[A]) =>{
         mkUnion(v1, t2)
-      case (t1: Term[A], v2: Var[A]) =>
+      }
+      case (t1: Cons[A], v2: Var[A]) =>{
         mkUnion(v2, t1)
+      }
       case (f1: Cons[A], f2: Cons[A]) =>
         if (!f1.doMatch(f2)) throw new UnificationFailure(s"$f1 != $f2")
+        
         //otherwise
         mkUnion(f1, f2)
         f1.args.zip(f2.args).foreach {
@@ -60,8 +65,8 @@ class UnionFindSolver[A] {
    * @return the canonical element
    */
   private def find(t: Term[A]): Term[A] = {
-    val k1 = parent(t)
-    if (k1 == t) t else find(k1)
+    val k1 = parent(t);
+    if (k1 == t) t else find(k1);
   }
 
   /**

@@ -1,7 +1,7 @@
 package tip.analysis
 
 import tip.AST.DepthFirstAstVisitor
-import tip.newAST._
+import tip.AST._
 import scala.collection.immutable
 
 /**

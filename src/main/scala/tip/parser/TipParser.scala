@@ -2,7 +2,7 @@ package tip.parser
 
 import org.parboiled2._
 import shapeless.HNil
-import tip.newAST._
+import tip.AST._
 import scala.collection.{ mutable, immutable }
 
 trait Comments {

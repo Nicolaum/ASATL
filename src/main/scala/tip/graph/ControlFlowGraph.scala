@@ -1,7 +1,7 @@
 package tip.graph
 
 import tip.dot.{ DotGraph, DotArrow, DotDirArrow, DotNode }
-import tip.newAST._
+import tip.AST._
 
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer

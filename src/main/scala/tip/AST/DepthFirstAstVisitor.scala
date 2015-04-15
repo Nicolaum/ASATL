@@ -1,6 +1,6 @@
 package tip.AST
 
-import tip.newAST._
+import tip.AST._
 
 /**
  * A depth-first visitor of the AST

@@ -1,4 +1,4 @@
-package tip.newAST
+package tip.AST
 
 import tip.solvers.Term
 import tip.types.TipType
@@ -18,11 +18,11 @@ case class AstMetadata(
 
   def typeStr(): String = {
     theType match {
-      case Some(t) => t.toString
+      case Some(t) => 
+        t.toString()
       case None => "NotInferred"
     }
   }
-
 }
 
 case class Loc(line: Int, col: Int) {
@@ -68,7 +68,7 @@ sealed abstract class ASTNode {
 
   def getId: String = s"${this.getClass.getSimpleName}:$offset"
 
-  def toTypedString(): String = toString
+  def toTypedString(indent : String = ""): String = toString
 }
 
 sealed trait ASTAtom extends ASTNode
@@ -79,14 +79,15 @@ sealed trait AExpr extends ASTNode {
   var meta: AstMetadata
 }
 
-case class ACallFuncExpr(targetFun: AExpr, args: immutable.Seq[AExpr], offset: Loc)(var meta: AstMetadata = AstMetadata()) extends AExpr {
+case class ACallFuncExpr(targetFun: AExpr, 
+                         args: immutable.Seq[AExpr], offset: Loc)(var meta: AstMetadata = AstMetadata()) extends AExpr {
   override def toString(): String = s"$targetFun(${args.mkString(",")})"
 }
 
 case class AIdentifier(value: String, offset: Loc)(var meta: AstMetadata = AstMetadata()) extends AExpr with ASTAtom {
   override def toString(): String = value
 
-  override def toTypedString(): String = {
+  override def toTypedString(indent : String = ""): String = {
     if (this.meta.definition.map(n => n == this).getOrElse(false))
       s"$value: ${this.meta.typeStr()}"
     else
@@ -125,13 +126,14 @@ sealed trait AStmt extends ASTNode
 case class AAssignStmt(left: AExpr, right: AExpr, offset: Loc) extends AStmt {
   override def toString(): String = s"$left = $right;"
 
-  override def toTypedString(): String = s"${left.toTypedString()} = ${right.toTypedString()};"
+  override def toTypedString(indent : String = ""): String 
+    = s"$indent${left.toTypedString(indent)} = ${right.toTypedString(indent)};"
 }
 
 case class ABlockStmt(content: immutable.Seq[AStmt], offset: Loc) extends AStmt {
   override def toString(): String = s"{\n${content.mkString("\n")}\n}"
 
-  override def toTypedString(): String = s"{\n${content.map(_.toTypedString()).mkString("\n")}\n}"
+  override def toTypedString(indent : String = ""): String = s"{\n${content.map(_.toTypedString(indent + "  ")).mkString("\n")}\n${indent}}"
 }
 
 case class AIfStmt(guard: AExpr, ifBranch: AStmt, elseBranch: Option[AStmt], offset: Loc) extends AStmt {
@@ -140,9 +142,9 @@ case class AIfStmt(guard: AExpr, ifBranch: AStmt, elseBranch: Option[AStmt], off
     s"if($guard) $ifBranch  ${elseb}"
   }
 
-  override def toTypedString(): String = {
-    val elseb = elseBranch.map("else " + _.toTypedString()).getOrElse("")
-    s"if(${guard.toTypedString()}) ${ifBranch.toTypedString()}  ${elseb}"
+  override def toTypedString(indent : String = ""): String = {
+    val elseb = elseBranch.map(" else " + _.toTypedString(indent)).getOrElse("")
+    s"${indent}if(${guard.toTypedString(indent)})${ifBranch.toTypedString(indent)}${elseb}"
   }
 }
 
@@ -152,21 +154,22 @@ case class AoutputStmt(value: AExpr, offset: Loc) extends AStmt {
 
 case class AReturnStmt(value: AExpr, offset: Loc) extends AStmt {
   override def toString(): String = s"return $value;"
+  override def toTypedString(indent : String = ""): String = s"${indent}return $value;"
 }
 
 case class AVarStmt(declIds: immutable.Seq[AIdentifier], offset: Loc) extends AStmt {
   override def toString(): String = s"var ${declIds.mkString(",")};"
 
-  override def toTypedString(): String = {
-    val typedVar = declIds.map(_.toTypedString()).mkString(",")
-    s"var $typedVar;"
+  override def toTypedString(indent : String = ""): String = {
+    val typedVar = declIds.map{x=>x.value + ":" + x.meta.typeStr()}.mkString(",")
+    s"${indent}var $typedVar;"
   }
 }
 
 case class AWhileStmt(guard: AExpr, innerBlock: AStmt, offset: Loc) extends AStmt {
   override def toString(): String = s"while(${guard.toTypedString()}) $innerBlock"
 
-  override def toTypedString(): String = s"while(${guard.toTypedString()}) ${innerBlock.toTypedString()}"
+  override def toTypedString(indent : String = ""): String = s"${indent}while(${guard.toTypedString(indent)}) ${innerBlock.toTypedString(indent)}"
 }
 
 //////////////// Program and function ///////////////
@@ -174,11 +177,12 @@ case class AWhileStmt(guard: AExpr, innerBlock: AStmt, offset: Loc) extends AStm
 case class AProgram(fun: immutable.Seq[AFunDeclaration], offset: Loc) extends ASTNode {
   override def toString(): String = s"${fun.mkString("\n\n")}"
 
-  override def toTypedString(): String = s"${fun.map(_.toTypedString).mkString("\n\n")}"
+  override def toTypedString(indent : String = ""): String = s"${fun.map(_.toTypedString(indent)).mkString("\n\n")}"
 }
 
 case class AFunDeclaration(name: AIdentifier, args: immutable.Seq[AIdentifier], stmts: ABlockStmt, offset: Loc)(var meta: AstMetadata = AstMetadata()) extends ASTNode {
   override def toString(): String = s"$name (${args.mkString(",")})\n$stmts"
 
-  override def toTypedString(): String = s"${name} (${args.map(_.toTypedString()).mkString(",")}): ${this.meta.typeStr()}\n${stmts.toTypedString()}"
+  override def toTypedString(indent : String = ""): String = 
+    s"${name} (${args.map(_.toTypedString(indent)).mkString(",")}): ${this.meta.typeStr()}\n${stmts.toTypedString()}"
 }
