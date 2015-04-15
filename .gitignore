@@ -36,3 +36,6 @@ comp.out
 
 # tip out folder
 out/
+*.vo
+*.glob
+*.v.d
