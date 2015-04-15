@@ -60,14 +60,17 @@ Inductive ID : Set :=
 (* annotate type in a live runtime enviroment, where any possible  *)
 (* input would  *)
 
+Inductive Address : Type :=
+  | addr : Address.
+
 Inductive P : Type :=
   | ampID : P
-  | alloc : P 
+  | alloc : P
   | astE  : P
   | null  : P.                (* null is a really bad NONE! *)
 
 Inductive ROV (T : Type) : Type :=
-  | ref : ROV T -> ROV T
+  | ref : P -> ROV T -> ROV T
   | val : Number -> ROV T.      (* Right now I am assuming all values are numbers *)
 (* What is the size of val? *)
 
@@ -139,5 +142,44 @@ Definition TypeConstraints (T : Type)
 
 
 
+(* Really should make modules *)
+
+Definition Specifiation_of_an_interpreter_for_TL (intrp : PROC -> option E) :=
+  (intrp (proc nil) = None) /\
+  (forall res : E,
+    intrp (proc (output res :: nil)) = (Some res)) /\
+  (forall (stm : S) (prog prog' : list S),
+    intrp (proc (stm :: prog')) = intrp (proc prog')) /\
+  (forall (i : ID) (e : E) (proc' : list S),
+     intrp (proc (assign i e :: proc')) = None) (* Something which allocates some memory *) /\
+  (forall (i : ID) (args : list ID) (locals : list ID)  locals ret(proc (func i l l0 stm e :: proc'))
+
+Theorem Specifiation_of_Interpretreter_is_Unique :
+  forall f g : PROC -> option E,
+    Specifiation_of_an_interpreter_for_TL f ->
+    Specifiation_of_an_interpreter_for_TL g ->
+    forall p : PROC,
+      f p = g p.
+Proof.
+  intros f g.
+  intros S_f S_g.
+  intro p.
+  case p as [proc].
+  induction proc as [ | stm proc' IHproc ].
+    unfold Specifiation_of_an_interpreter_for_TL in S_f, S_g.
+    destruct S_f as [H_F_error S_f'].
+    destruct S_g as [H_G_error S_g'].
+    rewrite -> H_F_error. 
+    symmetry.
+    exact H_G_error.
+
+    induction stm.
+      unfold Specifiation_of_an_interpreter_for_TL in S_f, S_g.
+      destruct S_f as [_ [_ [_ H_f_assign]]].
+      destruct S_g as [_ [_ [_ H_g_assign]]].
+      rewrite -> H_f_assign.
+      symmetry.
+      exact (H_g_assign i e proc').
+Abort.
 
 
