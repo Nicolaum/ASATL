@@ -1,0 +1,12 @@
+main() {
+  var h,t,n;
+  t = null;
+  n = 42;
+  while (n>0) {
+    n = n-1;
+    h = malloc;
+    *h = t;
+    t = h;
+  }
+  return 42;
+}

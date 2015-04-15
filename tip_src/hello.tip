@@ -1,0 +1,14 @@
+main() {
+  output 104;
+  output 101;
+  output 108;
+  output 108;
+  output 111;
+  output 32;
+  output 119;
+  output 111;
+  output 114;
+  output 108;
+  output 100;
+  return 0;
+}
